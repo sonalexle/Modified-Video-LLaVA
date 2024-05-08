@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/path/to/your/cloned/repo/of/Video-LLaVA")
+
 import argparse
 import torch
 import os
@@ -55,7 +58,7 @@ def eval_model(args):
 
         input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).cuda()
 
-        image = Image.open(os.path.join(args.image_folder, image_file))
+        image = Image.open(os.path.join(args.image_folder, image_file)).convert('RGB') # added .convert('RGB')
         image_tensor = image_processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
 
         stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2

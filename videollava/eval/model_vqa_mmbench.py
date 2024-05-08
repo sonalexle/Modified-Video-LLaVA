@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/path/to/your/cloned/repo/of/Video-LLaVA")
+
 import argparse
 import torch
 import os
@@ -85,7 +88,7 @@ def eval_model(args):
             if not is_none(hint):
                 question = hint + '\n' + question
             for option_char, option in zip(all_options[:len(options)], options):
-                question = question + '\n' + option_char + '. ' + option
+                question = question + '\n' + f"({option_char})" + " " + option
             qs = cur_prompt = question
             if model.config.mm_use_im_start_end:
                 qs = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN + '\n' + qs
@@ -96,12 +99,14 @@ def eval_model(args):
                 if args.lang == 'cn':
                     qs = qs + '\n' + "请直接回答选项字母。"
                 else:
-                    qs = qs + '\n' + "Answer with the option's letter from the given choices directly."
+                    # qs = qs + '\n' + "Answer with the option's letter from the given choices directly."
+                    qs = qs + "\nOnly give the best option."
 
             conv = conv_templates[args.conv_mode].copy()
             conv.append_message(conv.roles[0], qs)
             conv.append_message(conv.roles[1], None)
             prompt = conv.get_prompt()
+            prompt += " Best option: ("
 
             input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).cuda()
 
@@ -114,12 +119,13 @@ def eval_model(args):
                 output_ids = model.generate(
                     input_ids,
                     images=image_tensor.unsqueeze(0).half().cuda(),
-                    do_sample=True if args.temperature > 0 else False,
-                    temperature=args.temperature,
-                    top_p=args.top_p,
-                    num_beams=args.num_beams,
+                    # do_sample=True if args.temperature > 0 else False,
+                    # temperature=args.temperature,
+                    # top_p=args.top_p,
+                    # num_beams=args.num_beams,
                     # no_repeat_ngram_size=3,
-                    max_new_tokens=1024,
+                    # max_new_tokens=1024,
+                    max_new_tokens=2,
                     use_cache=True)
 
             input_token_len = input_ids.shape[1]

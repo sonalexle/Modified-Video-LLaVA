@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/path/to/your/cloned/repo/of/Video-LLaVA")
+
 import argparse
 import torch
 import os
@@ -132,7 +135,7 @@ def eval_model(args):
         outputs = tokenizer.batch_decode(output_ids[:, input_token_len:], skip_special_tokens=True)[0]
         outputs = outputs.strip()
 
-        print(outputs)
+        # print(outputs)
         ans_id = shortuuid.uuid()
         ans_file.write(json.dumps({"question_id": idx,
                                    "prompt": cur_prompt,

@@ -1,8 +1,11 @@
+import sys
+sys.path.append("/nlp-rcp-scratch/home/le/Video-LLaVA")
+
 import os
 import argparse
 import json
 
-from llava.eval.m4c_evaluator import EvalAIAnswerProcessor
+from videollava.eval.m4c_evaluator import EvalAIAnswerProcessor
 
 
 def parse_args():

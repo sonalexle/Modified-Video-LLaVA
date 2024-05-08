@@ -1,8 +1,9 @@
 #!/bin/bash
 
 CKPT_NAME="Video-LLaVA-7B"
-CKPT="checkpoints/${CKPT_NAME}"
+CKPT="LanguageBind/Video-LLaVA-7B"
 EVAL="eval"
+
 python3 -m videollava.eval.model_vqa_loader \
     --model-path ${CKPT} \
     --question-file ${EVAL}/vizwiz/llava_test.jsonl \

@@ -6,7 +6,7 @@ IFS=',' read -ra GPULIST <<< "$gpu_list"
 CHUNKS=${#GPULIST[@]}
 
 CKPT_NAME="Video-LLaVA-7B"
-CKPT="checkpoints/${CKPT_NAME}"
+CKPT="LanguageBind/Video-LLaVA-7B"
 SPLIT="llava_vqav2_mscoco_test-dev2015"
 EVAL="eval"
 
