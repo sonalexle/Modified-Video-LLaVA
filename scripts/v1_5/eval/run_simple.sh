@@ -57,7 +57,7 @@ gt_file_question="${root_dir}/Eval_QA/SQA3D_QA_new.json"
 
 
 # DON'T COMMENT OUT BELOW
-gt_file_answers="${root_dir}/Eval_QA/ANSWER.json"
+gt_file_answers="${root_dir}/Eval_QA/ANSWER.json" # https://huggingface.co/spaces/LanguageBind/Video-Bench/blob/main/file/ANSWER.json
 output_dir="${root_dir}/Eval_QA/predictions" # feel free to change this to any directory you want
 
 python videollava/eval/video/run_inference_video_qa.py \
