@@ -119,6 +119,8 @@ class LanguageBindVideoProcessor(ProcessorMixin):
 
     def __init__(self, config, tokenizer=None, **kwargs):
         super().__init__(**kwargs)
+        # mmco: unref short failure https://github.com/dmlc/decord/issues/177
+        # config.vision_config.video_decode_backend = 'opencv'
         self.config = config
         self.transform = get_video_transform(config)
         self.image_processor = load_and_transform_video
@@ -137,6 +139,8 @@ class LanguageBindVideoProcessor(ProcessorMixin):
             image_features = [self.image_processor(image, self.transform,
                                                    video_decode_backend=self.config.vision_config.video_decode_backend,
                                                    num_frames=self.config.vision_config.num_frames) for image in images]
+            if self.config.vision_config.video_decode_backend == 'pytorchvideo':
+                image_features = [f["video"] for f in image_features]
             image_features = torch.stack(image_features)
 
         if text is not None and images is not None:
