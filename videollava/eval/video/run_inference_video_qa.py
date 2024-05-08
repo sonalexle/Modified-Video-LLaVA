@@ -1,10 +1,12 @@
+import sys
+sys.path.append("/path/to/your/cloned/repo/of/Video-LLaVA")
+
 import math
 import os
 import argparse
 import json
 
 import torch
-import transformers
 from tqdm import tqdm
 from videollava.conversation import conv_templates, SeparatorStyle
 from videollava.constants import DEFAULT_IM_START_TOKEN, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_END_TOKEN, IMAGE_TOKEN_INDEX, DEFAULT_VID_START_TOKEN, DEFAULT_VID_END_TOKEN
@@ -32,7 +34,7 @@ def parse_args():
 
     # Define the command-line arguments
     parser.add_argument('--model_path', help='', required=True)
-    parser.add_argument('--cache_dir', help='', required=True)
+    parser.add_argument('--cache_dir', help='Directory to cache the model. (default, cannot override: ./.cache)', required=False, default='./.cache', type=str)
     parser.add_argument('--video_dir', help='Directory containing video files.', required=True)
     parser.add_argument('--gt_file_question', help='Path to the ground truth file containing question.', required=True)
     parser.add_argument('--gt_file_answers', help='Path to the ground truth file containing answers.', required=True)
@@ -59,7 +61,7 @@ def get_model_output(model, video_processor, tokenizer, video, qs, args):
     conv.append_message(conv.roles[0], qs)
     conv.append_message(conv.roles[1], None)
     prompt = conv.get_prompt()
-
+    prompt += " Best option: ("
 
     video_tensor = video_processor.preprocess(video, return_tensors='pt')['pixel_values'][0].half().to(args.device)
     # print(video_tensor.shape)
@@ -74,7 +76,7 @@ def get_model_output(model, video_processor, tokenizer, video, qs, args):
             input_ids,
             images=[video_tensor],
             do_sample=True,
-            temperature=0.0,
+            temperature=0.001,
             max_new_tokens=1024,
             use_cache=True,
             stopping_criteria=[stopping_criteria])
@@ -88,8 +90,41 @@ def get_model_output(model, video_processor, tokenizer, video, qs, args):
     if outputs.endswith(stop_str):
         outputs = outputs[:-len(stop_str)]
     outputs = outputs.strip()
-    print(outputs)
+    # print(outputs)
     return outputs
+
+
+def get_prompt_and_path(Eval_Video_root, item):
+    question = ""
+    # question = "Carefully watch the video and select the best option that accurately addresses the question.\n"
+    question += "Question: " + item['question']
+    question = question.strip()
+    question += "\nOptions:\n"
+    if len(item['choices']) == 6:
+        question += f"(A) {item['choices']['A']}\n(B) {item['choices']['B']}\n(C) {item['choices']['C']}\n(D) {item['choices']['D']}\n(E) {item['choices']['E']}\n(F) {item['choices']['F']}\nOnly give the best option."
+        candidates = ['A', 'B', 'C', 'D', 'E', 'F']
+        candidates_long = [f" A.{item['choices']['A']}", f"B.{item['choices']['B']}", f"C.{item['choices']['C']}", f"D.{item['choices']['D']}", f"E.{item['choices']['E']}", f"F.{item['choices']['F']}"]
+    elif len(item['choices']) == 5:
+        question += f"(A) {item['choices']['A']}\n(B) {item['choices']['B']}\n(C) {item['choices']['C']}\n(D) {item['choices']['D']}\n(E) {item['choices']['E']}\nOnly give the best option."
+        candidates = ['A', 'B', 'C', 'D', 'E']
+        candidates_long = [f" A.{item['choices']['A']}", f"B.{item['choices']['B']}", f"C.{item['choices']['C']}", f"D.{item['choices']['D']}", f"E.{item['choices']['E']}"]
+    elif len(item['choices']) == 4:
+        question += f"(A) {item['choices']['A']}\n(B) {item['choices']['B']}\n(C) {item['choices']['C']}\n(D) {item['choices']['D']}\nOnly give the best option."
+        candidates = ['A', 'B', 'C', 'D']
+        candidates_long = [f" A.{item['choices']['A']}", f"B.{item['choices']['B']}", f"C.{item['choices']['C']}", f"D.{item['choices']['D']}"]
+    elif len(item['choices']) == 3:
+        question += f"(A) {item['choices']['A']}\n(B) {item['choices']['B']}\n(C) {item['choices']['C']}\nOnly give the best option."
+        candidates = ['A', 'B', 'C']
+        candidates_long = [f" A.{item['choices']['A']}", f"B.{item['choices']['B']}", f"C.{item['choices']['C']}"]
+    elif len(item['choices']) == 2:
+        question += f"(A) {item['choices']['A']}\n(B) {item['choices']['B']}\nOnly give the best option."
+        candidates = ['A', 'B']
+        candidates_long = [f" A.{item['choices']['A']}", f"B.{item['choices']['B']}"]
+    vid_rela_path = item['vid_path']
+    vid_filename = os.path.basename(vid_rela_path)
+    # vid_path = os.path.join(Eval_Video_root, vid_rela_path)
+    vid_path = os.path.join(Eval_Video_root, vid_filename)
+    return question, vid_path
 
 
 def run_inference(args):
@@ -111,8 +146,9 @@ def run_inference(args):
     #     gt_answers = json.load(file)
 
     gt_questions = json.load(open(args.gt_file_question, "r"))
-    gt_questions = get_chunk(gt_questions, args.num_chunks, args.chunk_idx)
+    # gt_questions = get_chunk(gt_questions, args.num_chunks, args.chunk_idx)
     gt_answers = json.load(open(args.gt_file_answers, "r"))
+    gt_answers = gt_answers[os.path.basename(args.video_dir)]
     # gt_answers = get_chunk(gt_answers, args.num_chunks, args.chunk_idx)
 
     answers_file = os.path.join(args.output_dir, f"{args.output_name}.json")
@@ -126,33 +162,25 @@ def run_inference(args):
     output_list = []  # List to store the output results
 
 
-    video_formats = ['.mp4', '.avi', '.mov', '.mkv']
-
     # Iterate over each sample in the ground truth file
-    index = 0
-    for sample in tqdm(gt_questions):
-        video_name = sample['video_name']
-        question = sample['question']
-        id = sample['question_id']
-        answer = gt_answers[index]['answer']
-        index += 1
+    for q_id, sample in tqdm(gt_questions.items()):
+        video_id = sample['video_id']
+        answer = gt_answers[q_id]['answer']
+        question, video_path = get_prompt_and_path(args.video_dir, sample)
 
-        sample_set = {'id': id, 'question': question, 'answer': answer}
+        sample_set = {'video_id': video_id, 'q_id': q_id, 'question': question, 'answer': answer}
+        # print(sample_set)
 
         # Load the video file
-        for fmt in tqdm(video_formats):  # Added this line
-            temp_path = os.path.join(args.video_dir, f"{video_name}{fmt}")
-            if os.path.exists(temp_path):
-                video_path = temp_path
-                # try:
-                # Run inference on the video and add the output to the list
-                output = get_model_output(model, processor['video'], tokenizer, video_path, question, args)
-                sample_set['pred'] = output
-                output_list.append(sample_set)
-                # except Exception as e:
-                #     print(f"Error processing video file '{video_name}': {e}")
-                ans_file.write(json.dumps(sample_set) + "\n")
-                break
+        assert os.path.exists(video_path), f"Video file '{video_path}' does not exist"
+        # try:
+        # Run inference on the video and add the output to the list
+        output = get_model_output(model, processor['video'], tokenizer, video_path, question, args)
+        sample_set['pred'] = output
+        output_list.append(sample_set)
+        # except Exception as e:
+        #     print(f"Error processing video file '{video_name}': {e}")
+        ans_file.write(json.dumps(sample_set) + "\n")
 
     ans_file.close()
     # Save the output list to a JSON file
